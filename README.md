@@ -18,8 +18,8 @@ This project is a web-based application that extracts key details from multiple 
 ### Running the Application
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/Robbin808/News_Summarizer.git
-   cd Robbin808/News_Summarizer
+   git clone https://github.com/karthikaxiom/News_Summarizer.git
+   cd karthikaxiom/News_Summarizer
    ```
 2. **Run the Flask API**:
    ```bash
@@ -90,7 +90,7 @@ This project is a web-based application that extracts key details from multiple 
 
 -📧 Email: karthikbrinfopro@gmail.com
 
--🔗 GitHub: https://github.com/Robbin808
+-🔗 GitHub: https://github.com/karthikaxiom
 
 ## 🏁 Conclusion
 This project provides a comprehensive solution for news summarization, sentiment analysis, and text-to-speech conversion. It offers valuable insights into the company's news coverage and presents the information in an accessible format.
