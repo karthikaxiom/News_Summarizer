@@ -14,6 +14,12 @@ env/
 # Generated audio
 *.mp3
 
+# Test and build files
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
 # IDE and operating-system files
 .vscode/
 .idea/
