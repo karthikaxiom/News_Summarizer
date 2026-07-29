@@ -2,11 +2,6 @@
 __pycache__/
 *.py[cod]
 
-# Virtual environments
-.venv/
-venv/
-env/
-
 # Environment variables and API keys
 .env
 .env.*
