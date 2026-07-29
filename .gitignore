@@ -20,8 +20,4 @@ env/
 .DS_Store
 Thumbs.db
 
-# Test and build files
-.pytest_cache/
-dist/
-build/
-*.egg-info/
+
