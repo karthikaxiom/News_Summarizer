@@ -101,7 +101,7 @@ def generate_tts(text):
     # Try Google first, then MyMemory if Google is rate-limiting requests.
     translators = [
         ("Google", lambda: GoogleTranslator(source="auto", target="hi").translate(text)),
-        ("MyMemory", lambda: MyMemoryTranslator(source="en", target="hi").translate(text)),
+        ("MyMemory", lambda: MyMemoryTranslator(source="en-GB", target="hi-IN").translate(text)),
     ]
 
     for provider, translate in translators:
