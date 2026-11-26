@@ -1,5 +1,5 @@
+import io
 import os
-from collections import Counter
 
 import requests
 from deep_translator import GoogleTranslator
@@ -8,15 +8,12 @@ from textblob import TextBlob
 
 
 def get_news_articles(query):
-    """
-    Fetch up to 10 news articles using NewsAPI.
-    Store NEWS_API_KEY in the deployment's environment/secrets.
-    """
+    """Fetch up to 10 news articles using the NewsAPI key stored in the environment."""
     api_key = os.getenv("NEWS_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "NEWS_API_KEY is not configured. Add it to your Hugging Face Space "
-            "Settings > Variables and secrets."
+            "NEWS_API_KEY is not configured. Add your existing key in "
+            "Hugging Face Space Settings > Variables and secrets."
         )
 
     try:
@@ -31,15 +28,14 @@ def get_news_articles(query):
         if data.get("status") != "ok":
             raise RuntimeError(data.get("message", "NewsAPI returned an error."))
 
-        articles = []
-        for item in data.get("articles", [])[:10]:
-            articles.append({
+        return [
+            {
                 "title": item.get("title") or "Untitled article",
                 "summary": item.get("description") or "No summary available",
                 "url": item.get("url") or "",
-            })
-        return articles
-
+            }
+            for item in data.get("articles", [])[:10]
+        ]
     except requests.exceptions.RequestException as exc:
         raise RuntimeError(f"Unable to fetch news from NewsAPI: {exc}") from exc
 
@@ -95,31 +91,22 @@ def compare_sentiments(articles, company_name):
     }
 
 
-def generate_tts(text, filename="final_sentiment.mp3"):
-    """
-    Generate Hindi speech when translation is available.
-    If Google translation is rate-limited or unavailable, generate English speech.
-    Returns the language code ('hi' or 'en'), or None if audio generation fails.
-    """
+def generate_tts(text):
+    """Translate the insights into Hindi and return Hindi MP3 audio bytes."""
     if not text or not text.strip():
-        return None
-
-    speech_text = text
-    language = "hi"
+        raise RuntimeError("There are no insights available to convert to audio.")
 
     try:
-        speech_text = GoogleTranslator(source="auto", target="hi").translate(text)
-        if not speech_text:
-            raise ValueError("Translator returned empty text.")
-    except Exception as exc:
-        # Translation is an optional enhancement; do not let it break the app.
-        print(f"Hindi translation unavailable; using English audio. Details: {exc}")
-        speech_text = text
-        language = "en"
+        hindi_text = GoogleTranslator(source="auto", target="hi").translate(text)
+        if not hindi_text or not hindi_text.strip():
+            raise RuntimeError("The Hindi translator returned empty text.")
 
-    try:
-        gTTS(text=speech_text, lang=language).save(filename)
-        return language
+        audio_buffer = io.BytesIO()
+        gTTS(text=hindi_text, lang="hi").write_to_fp(audio_buffer)
+        audio_buffer.seek(0)
+        return audio_buffer.getvalue()
     except Exception as exc:
-        print(f"Text-to-speech generation failed: {exc}")
-        return None
+        raise RuntimeError(
+            "Hindi audio could not be generated. Check the internet connection "
+            "of the Hugging Face Space and try again. Details: " + str(exc)
+        ) from exc
