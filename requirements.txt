@@ -1,8 +1,7 @@
-Requests 
 streamlit
-beautifulsoup4
 requests
 textblob
 gTTS
+deep-translator
 Flask
-googletrans
+flask-cors
