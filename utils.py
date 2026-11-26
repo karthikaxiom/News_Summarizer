@@ -1,123 +1,125 @@
-import requests
-from textblob import TextBlob
-from collections import Counter
-from gtts import gTTS
-from deep_translator import GoogleTranslator
 import os
+from collections import Counter
+
+import requests
+from deep_translator import GoogleTranslator
+from gtts import gTTS
+from textblob import TextBlob
+
 
 def get_news_articles(query):
     """
-    Fetches news articles using NewsAPI.
-    Returns a list of dictionaries containing title, summary, and URL.
+    Fetch up to 10 news articles using NewsAPI.
+    Store NEWS_API_KEY in the deployment's environment/secrets.
     """
-    API_KEY = "f804905478b34ede96743c3f80d11df3"  # Replace with your API key
-    url = f"https://newsapi.org/v2/everything?q={query}&apiKey={API_KEY}"
+    api_key = os.getenv("NEWS_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "NEWS_API_KEY is not configured. Add it to your Hugging Face Space "
+            "Settings > Variables and secrets."
+        )
 
     try:
-        response = requests.get(url)  # Request to fetch the news
-        response.raise_for_status()  # Raise an exception for bad responses (4xx, 5xx)
+        response = requests.get(
+            "https://newsapi.org/v2/everything",
+            params={"q": query, "apiKey": api_key, "pageSize": 10, "language": "en"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        data = response.json()
 
-        data = response.json()  # Parse the JSON response
-        articles = []  # Store the articles
+        if data.get("status") != "ok":
+            raise RuntimeError(data.get("message", "NewsAPI returned an error."))
 
-        for item in data.get("articles", [])[:10]:  # Get the first 10 articles
+        articles = []
+        for item in data.get("articles", [])[:10]:
             articles.append({
-                "title": item["title"],
-                "summary": item["description"] or "No summary available",
-                "url": item["url"]
+                "title": item.get("title") or "Untitled article",
+                "summary": item.get("description") or "No summary available",
+                "url": item.get("url") or "",
             })
-
         return articles
 
-    except requests.exceptions.RequestException as e:
-        print("Error fetching news:", e)
-        return []
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"Unable to fetch news from NewsAPI: {exc}") from exc
+
 
 def analyze_sentiment(text):
-    """
-    Performs sentiment analysis on the given text.
-    Returns 'Positive', 'Negative', or 'Neutral'.
-    """
-    analysis = TextBlob(text)
-    polarity = analysis.sentiment.polarity  # Polarity score (-1 to 1)
-
+    """Classify text as Positive, Negative, or Neutral using TextBlob."""
+    polarity = TextBlob(text or "").sentiment.polarity
     if polarity > 0:
         return "Positive"
-    elif polarity < 0:
+    if polarity < 0:
         return "Negative"
-    else:
-        return "Neutral"
+    return "Neutral"
+
 
 def compare_sentiments(articles, company_name):
-    """
-    Performs comparative sentiment analysis and generates insights.
-    """
+    """Compare article sentiment and produce brief rule-based insights."""
     sentiment_counts = {"Positive": 0, "Negative": 0, "Neutral": 0}
     sentiment_groups = {"Positive": [], "Negative": [], "Neutral": []}
 
     for article in articles:
-        sentiment = analyze_sentiment(article["summary"])
+        sentiment = analyze_sentiment(article.get("summary", ""))
         sentiment_counts[sentiment] += 1
         sentiment_groups[sentiment].append(article)
 
-    # Identify dominant sentiment
     dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get)
 
-    # Extract common words/themes from positive and negative news
-    positive_topics = Counter()
-    negative_topics = Counter()
-
-    for article in sentiment_groups["Positive"]:
-        positive_topics.update(article["title"].split())
-
-    for article in sentiment_groups["Negative"]:
-        negative_topics.update(article["title"].split())
-
-    # Identify most common topics in each sentiment group
-    top_positive_topics = [word for word, _ in positive_topics.most_common(5)]
-    top_negative_topics = [word for word, _ in negative_topics.most_common(5)]
-
-    # Generate insights based on sentiment distribution and trends
     insights = []
-
     if sentiment_counts["Positive"] > sentiment_counts["Negative"]:
-        insights.append(f"{company_name}'s news coverage is mostly positive, reflecting strong market confidence.")
+        insights.append(
+            f"{company_name}'s news coverage is mostly positive, reflecting stronger positive than negative reporting."
+        )
     elif sentiment_counts["Negative"] > sentiment_counts["Positive"]:
-        insights.append(f"{company_name} is facing more negative news coverage, indicating potential challenges or controversies.")
+        insights.append(
+            f"{company_name} has more negative than positive news coverage, indicating potential challenges or concerns."
+        )
     else:
-        insights.append(f"{company_name}'s news coverage is balanced, with equal amounts of positive and negative sentiment.")
+        insights.append(
+            f"{company_name}'s news coverage has equal positive and negative article counts."
+        )
 
-    # Comparative Analysis: Identify Contrasting News Trends
     if sentiment_groups["Positive"] and sentiment_groups["Negative"]:
-        first_positive_title = sentiment_groups["Positive"][0]["title"]
-        first_negative_title = sentiment_groups["Negative"][0]["title"]
-
-        insights.append(f"Example contrast: '{first_positive_title}' focuses on company success, whereas '{first_negative_title}' highlights a challenge.")
+        positive_title = sentiment_groups["Positive"][0]["title"]
+        negative_title = sentiment_groups["Negative"][0]["title"]
+        insights.append(
+            f"Example contrast: '{positive_title}' is classified as positive, while "
+            f"'{negative_title}' is classified as negative."
+        )
 
     return {
         "Sentiment Distribution": sentiment_counts,
         "Dominant Sentiment": dominant_sentiment,
-        "Insights": insights
+        "Insights": insights,
     }
+
 
 def generate_tts(text, filename="final_sentiment.mp3"):
     """
-    Converts the given text to speech in Hindi and saves it as an MP3 file.
+    Generate Hindi speech when translation is available.
+    If Google translation is rate-limited or unavailable, generate English speech.
+    Returns the language code ('hi' or 'en'), or None if audio generation fails.
     """
-    if not text.strip():
-        print("No insights to convert to speech.")
-        return
+    if not text or not text.strip():
+        return None
 
-    # Translate to Hindi
-    translated_text = GoogleTranslator(source="auto", target="hi").translate(text)
-    
-    print(f"Translated Text: {translated_text}")  
+    speech_text = text
+    language = "hi"
 
-    # Convert Hindi text to speech
-    tts = gTTS(text=translated_text, lang="hi")
-    tts.save(filename)
+    try:
+        speech_text = GoogleTranslator(source="auto", target="hi").translate(text)
+        if not speech_text:
+            raise ValueError("Translator returned empty text.")
+    except Exception as exc:
+        # Translation is an optional enhancement; do not let it break the app.
+        print(f"Hindi translation unavailable; using English audio. Details: {exc}")
+        speech_text = text
+        language = "en"
 
-    print(f" Hindi audio saved as {filename}")
-
-    # Play the audio file automatically
-    os.system(f"start {filename}")
+    try:
+        gTTS(text=speech_text, lang=language).save(filename)
+        return language
+    except Exception as exc:
+        print(f"Text-to-speech generation failed: {exc}")
+        return None
