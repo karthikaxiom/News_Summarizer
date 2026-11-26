@@ -2,7 +2,7 @@ import io
 import os
 
 import requests
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator, MyMemoryTranslator
 from gtts import gTTS
 from textblob import TextBlob
 
@@ -24,7 +24,6 @@ def get_news_articles(query):
         )
         response.raise_for_status()
         data = response.json()
-
         if data.get("status") != "ok":
             raise RuntimeError(data.get("message", "NewsAPI returned an error."))
 
@@ -61,8 +60,8 @@ def compare_sentiments(articles, company_name):
         sentiment_groups[sentiment].append(article)
 
     dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get)
-
     insights = []
+
     if sentiment_counts["Positive"] > sentiment_counts["Negative"]:
         insights.append(
             f"{company_name}'s news coverage is mostly positive, reflecting stronger positive than negative reporting."
@@ -92,21 +91,38 @@ def compare_sentiments(articles, company_name):
 
 
 def generate_tts(text):
-    """Translate the insights into Hindi and return Hindi MP3 audio bytes."""
+    """Translate insights into Hindi and return MP3 audio bytes."""
     if not text or not text.strip():
         raise RuntimeError("There are no insights available to convert to audio.")
 
-    try:
-        hindi_text = GoogleTranslator(source="auto", target="hi").translate(text)
-        if not hindi_text or not hindi_text.strip():
-            raise RuntimeError("The Hindi translator returned empty text.")
+    hindi_text = None
+    translation_errors = []
 
+    # Try Google first, then MyMemory if Google is rate-limiting requests.
+    translators = [
+        ("Google", lambda: GoogleTranslator(source="auto", target="hi").translate(text)),
+        ("MyMemory", lambda: MyMemoryTranslator(source="en", target="hi").translate(text)),
+    ]
+
+    for provider, translate in translators:
+        try:
+            candidate = translate()
+            if candidate and candidate.strip():
+                hindi_text = candidate.strip()
+                break
+        except Exception as exc:
+            translation_errors.append(f"{provider}: {exc}")
+
+    if not hindi_text:
+        raise RuntimeError(
+            "Hindi translation services are temporarily unavailable. "
+            "Please try again later. " + " | ".join(translation_errors)
+        )
+
+    try:
         audio_buffer = io.BytesIO()
         gTTS(text=hindi_text, lang="hi").write_to_fp(audio_buffer)
         audio_buffer.seek(0)
         return audio_buffer.getvalue()
     except Exception as exc:
-        raise RuntimeError(
-            "Hindi audio could not be generated. Check the internet connection "
-            "of the Hugging Face Space and try again. Details: " + str(exc)
-        ) from exc
+        raise RuntimeError(f"Hindi speech generation failed: {exc}") from exc
