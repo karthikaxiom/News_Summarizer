@@ -43,19 +43,19 @@ if company_name.strip():
     for insight in sentiment_summary["Insights"]:
         st.write(f"- {insight}")
 
-    if st.button("Play audio for Insights"):
-        final_sentiment = " ".join(sentiment_summary["Insights"])
-        with st.spinner("Generating audio..."):
-            audio_language = generate_tts(final_sentiment, "final_sentiment.mp3")
+    if st.button("Generate Hindi audio for insights"):
+        with st.spinner("Translating insights and generating Hindi audio..."):
+            try:
+                final_insights = " ".join(sentiment_summary["Insights"])
+                st.session_state["news_summarizer_audio"] = generate_tts(final_insights)
+                st.session_state["news_summarizer_audio_error"] = None
+            except RuntimeError as exc:
+                st.session_state["news_summarizer_audio"] = None
+                st.session_state["news_summarizer_audio_error"] = str(exc)
 
-        if audio_language:
-            st.audio("final_sentiment.mp3", format="audio/mp3")
-            if audio_language == "hi":
-                st.success("Hindi audio generated successfully!")
-            else:
-                st.warning(
-                    "Hindi translation is temporarily unavailable. "
-                    "English audio has been generated instead."
-                )
-        else:
-            st.error("Audio generation failed. Please try again.")
+    if st.session_state.get("news_summarizer_audio_error"):
+        st.error(st.session_state["news_summarizer_audio_error"])
+
+    if st.session_state.get("news_summarizer_audio"):
+        st.audio(st.session_state["news_summarizer_audio"], format="audio/mp3")
+        st.success("Hindi audio is ready. Press play to listen.")
